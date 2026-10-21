@@ -1,0 +1,16 @@
+import { createApp } from 'vue'
+import { createPinia } from 'pinia'
+import { createRouter, createWebHashHistory } from 'vue-router'
+import { Quasar, Notify, Dialog } from 'quasar'
+import '@quasar/extras/material-icons/material-icons.css'
+import 'quasar/src/css/index.sass'
+import './css/app.css'
+import App from './App.vue'
+import Dashboard from './pages/Dashboard.vue'
+import Servers from './pages/Servers.vue'
+import Applications from './pages/Applications.vue'
+import Alerts from './pages/Alerts.vue'
+import Settings from './pages/Settings.vue'
+import Users from './pages/Users.vue'
+const router=createRouter({history:createWebHashHistory(),routes:[{path:'/',component:Dashboard},{path:'/servers',component:Servers},{path:'/applications',component:Applications},{path:'/alerts',component:Alerts},{path:'/settings',component:Settings},{path:'/users',component:Users}]})
+createApp(App).use(createPinia()).use(router).use(Quasar,{plugins:{Notify,Dialog},config:{brand:{primary:'#009e70',negative:'#e34c61',warning:'#e9a229'}}}).mount('#app')

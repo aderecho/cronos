@@ -1,0 +1,104 @@
+services:
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-cronos}
+      MYSQL_USER: ${MYSQL_USER:-cronos}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Set MYSQL_PASSWORD in .env}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in .env}
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: [CMD-SHELL, 'MYSQL_PWD="$${MYSQL_PASSWORD}" mysql -u "$${MYSQL_USER}" -e "SELECT 1" "$${MYSQL_DATABASE}"']
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+  redis:
+    image: redis:7.4-alpine
+    command: [redis-server, --appendonly, 'yes']
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+  rabbitmq:
+    image: rabbitmq:4.2-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-cronos}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:?Set RABBITMQ_DEFAULT_PASS in .env}
+      RABBITMQ_DEFAULT_VHOST: ${RABBITMQ_DEFAULT_VHOST:-cronos}
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: [CMD, rabbitmq-diagnostics, -q, ping]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+  api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    env_file: .env
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_PORT: '3306'
+      REDIS_URL: redis://redis:6379/0
+      RABBITMQ_URL: amqp://${RABBITMQ_DEFAULT_USER:-cronos}:${RABBITMQ_DEFAULT_PASS:?Set RABBITMQ_DEFAULT_PASS}@rabbitmq:5672/${RABBITMQ_DEFAULT_VHOST:-cronos}
+    ports:
+      - 127.0.0.1:8100:8100
+    volumes:
+      - ./secrets:/run/secrets:ro
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+  worker:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    env_file: .env
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_PORT: '3306'
+      REDIS_URL: redis://redis:6379/0
+      RABBITMQ_URL: amqp://${RABBITMQ_DEFAULT_USER:-cronos}:${RABBITMQ_DEFAULT_PASS:?Set RABBITMQ_DEFAULT_PASS}@rabbitmq:5672/${RABBITMQ_DEFAULT_VHOST:-cronos}
+    command: [celery, -A, config, worker, --loglevel=INFO, --concurrency=4]
+    volumes:
+      - ./secrets:/run/secrets:ro
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+  scheduler:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    env_file: .env
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_PORT: '3306'
+      REDIS_URL: redis://redis:6379/0
+    command: [celery, -A, config, beat, --loglevel=INFO, --schedule=/tmp/celerybeat]
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+volumes:
+  mysql-data:
+  redis-data:
+  rabbitmq-data:

@@ -1,0 +1,7 @@
+.git
+.env
+.venv
+.runtime
+frontend
+secrets
+**/__pycache__

@@ -1,0 +1,4 @@
+export function relative(value:string|null|undefined){if(!value)return 'Never';const s=Math.max(0,Math.round((Date.now()-new Date(value).getTime())/1000));return s<60?`${s}s ago`:s<3600?`${Math.floor(s/60)}m ago`:s<86400?`${Math.floor(s/3600)}h ago`:`${Math.floor(s/86400)}d ago`}
+export function date(value:string|null|undefined){return value?new Intl.DateTimeFormat('en-PH',{dateStyle:'medium',timeStyle:'short',timeZone:'Asia/Manila'}).format(new Date(value)):'—'}
+export function percent(value:number|null|undefined){return value==null?'—':`${Math.round(value)}%`}
+export function tone(value:string){return ['Healthy','Reachable','Agent reporting','active','resolved'].includes(value)?'good':['Critical','Unreachable','Endpoint unreachable','Down','failed','open'].includes(value)?'bad':['Warning','Degraded','acknowledged','Maintenance'].includes(value)?'warn':'neutral'}

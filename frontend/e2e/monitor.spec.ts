@@ -1,0 +1,110 @@
+import {test,expect} from '@playwright/test'
+async function signIn(page:any){await page.goto('/');await page.getByRole('button',{name:'Explore the demo'}).click();await expect(page.getByRole('button',{name:/atlas-production/}).first()).toBeVisible()}
+test('inventory, telemetry, incidents, acknowledgement, settings, and retirement',async({page,request})=>{
+ const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message))
+ await signIn(page)
+ const login=await request.post('/api/v1/auth/demo');const session=await login.json();const headers={Authorization:`Bearer ${session.access}`}
+ const name=`qa-server-${Date.now()}`;let serverId:number|undefined
+ try{
+  await page.getByRole('button',{name:'Add server',exact:true}).click()
+  await page.getByLabel('Server name', {exact:true}).fill(name)
+  await page.getByLabel('Hostname or IP address').fill('qa.example.com')
+  await page.getByRole('button',{name:'Save server'}).click()
+  await expect(page.getByRole('button',{name:new RegExp(name)}).first()).toBeVisible()
+  const inventory=await (await request.get('/api/v1/servers',{headers})).json();serverId=inventory.results.find((s:any)=>s.name===name).id
+  await page.getByRole('button',{name:new RegExp(name)}).first().click()
+  await expect(page.getByText('Current health is unknown.')).toBeVisible()
+  await page.getByRole('button',{name:'Generate token',exact:true}).click()
+  await page.getByRole('button',{name:'OK',exact:true}).click()
+  await expect(page.locator('.secret-box code')).toBeVisible()
+  const token=await page.locator('.secret-box code').innerText()
+  await expect(page.getByRole('heading',{name:'Install on this server'})).toBeVisible()
+  await expect(page.locator('.install-command')).toContainText('wget --https-only')
+  await expect(page.locator('.install-command')).toContainText('sudo bash install-cronos-agent.sh')
+  expect((await page.locator('.install-command').innerText()).includes(token)).toBe(false)
+  for(let i=0;i<3;i++){
+   const result=await request.post('/api/v1/agent/telemetry',{headers:{Authorization:`Bearer ${token}`},data:{sample_id:crypto.randomUUID(),sampled_at:new Date().toISOString(),cpu:99,ram:99,filesystems:[{mount:'/',used_percent:96,inode_percent:96}],services:{}}})
+   expect(result.status()).toBe(201)
+  }
+  await page.getByRole('button',{name:'Close server details'}).click()
+  await page.locator('.sidebar').getByRole('link',{name:'Overview',exact:true}).click()
+  await page.getByRole('button',{name:'Refresh',exact:true}).click()
+  const row=page.getByRole('button',{name:new RegExp(name)}).first();await expect(row).toContainText('Critical')
+  await page.locator('.sidebar').getByRole('link',{name:'Alerts'}).click()
+  await page.getByRole('button',{name:new RegExp(name+': low server health')}).click()
+  await page.getByRole('button',{name:'Acknowledge',exact:true}).click()
+  await expect(page.locator('.detail-panel .status-badge')).toHaveText('acknowledged')
+  await page.getByLabel('Add an investigation note').fill('Investigating resource saturation.')
+  await page.getByRole('button',{name:'Add comment'}).click()
+  await expect(page.getByText('Investigating resource saturation.',{exact:true})).toBeVisible()
+  await page.getByRole('button',{name:'Close incident'}).click()
+  await page.locator('.sidebar').getByRole('link',{name:'Settings',exact:true}).click()
+  await expect(page.getByText('Live alerts are available.',{exact:false})).toBeVisible()
+  await page.getByRole('button',{name:'Register this device'}).click()
+  await expect(page.getByText('Notifications connected. Live alerts are enabled while the app is open.',{exact:true})).toBeVisible({timeout:20000})
+  await page.getByRole('button',{name:'Send test notification',exact:true}).click()
+  await expect(page.getByText('Cronos test notification',{exact:true})).toBeVisible({timeout:30000})
+  await page.screenshot({path:'/tmp/cronos-rabbitmq-notification.png',animations:'disabled'})
+  await page.locator('.sidebar').getByRole('link',{name:'Applications',exact:true}).click()
+  await page.getByRole('button',{name:/API Gateway/}).click()
+  await expect(page.getByText('Successful checks · 24h')).toBeVisible()
+  await expect(page.locator('.detail-panel canvas')).toBeVisible()
+  await page.getByRole('button',{name:'Close application details'}).click()
+  expect(errors).toEqual([])
+ }finally{if(serverId)await request.delete(`/api/v1/servers/${serverId}`,{headers}).catch(()=>{})}
+})
+for(const viewport of [{width:390,height:844},{width:768,height:1024},{width:1504,height:1045}]){
+ test(`responsive dashboard and navigation ${viewport.width}`,async({page})=>{
+  await page.setViewportSize(viewport);await signIn(page)
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true)
+  const nav=page.locator(viewport.width<=600?'.bottom-nav':'.sidebar')
+  await nav.getByRole('link',{name:'Servers',exact:true}).click()
+  await expect(page.getByRole('heading',{name:'Servers',exact:true})).toBeVisible()
+  await page.getByRole('textbox',{name:'Search servers'}).fill('worker-01')
+  await expect(page.getByRole('button',{name:/worker-01/})).toBeVisible()
+  await expect(page.getByRole('button',{name:/atlas-production/})).toHaveCount(0)
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true)
+  await page.getByRole('button',{name:/worker-01/}).click()
+  await expect(page.getByRole('heading',{name:'Resource history'})).toBeVisible()
+  await expect(page.locator('.detail-panel canvas')).toBeVisible()
+  expect(await page.locator('.detail-panel').evaluate(el=>el.scrollWidth<=el.clientWidth)).toBe(true)
+ })
+}
+
+test('user management and access roles',async({page,request})=>{
+ const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message))
+ await signIn(page)
+ await page.goto('/#/users')
+ await expect(page.getByRole('heading',{name:'Users & roles',exact:true})).toBeVisible()
+ const username=`qa-user-${Date.now()}`
+ const login=await (await request.post('/api/v1/auth/demo')).json();const headers={Authorization:`Bearer ${login.access}`}
+ let id:number|undefined
+ try{
+ await page.getByRole('button',{name:'Add user',exact:true}).click()
+ await page.getByLabel('Username',{exact:true}).fill(username)
+ await page.getByLabel('Password',{exact:true}).fill('Reliable-password-482!')
+ await page.getByRole('button',{name:'Save user',exact:true}).click()
+ await expect(page.getByText(username,{exact:true})).toBeVisible()
+ const accounts=await (await request.get('/api/v1/users',{headers})).json();id=accounts.results.find((u:any)=>u.username===username).id
+ await page.getByRole('button',{name:`Access roles for ${username}`,exact:true}).click()
+ const select=page.getByRole('combobox').first();await select.click()
+ await page.getByRole('option',{name:'Operator',exact:true}).click()
+ await page.getByRole('button',{name:'Save access roles',exact:true}).click()
+ await expect(page.getByRole('dialog')).toHaveCount(0)
+ const assigned=await (await request.get(`/api/v1/users/${id}/access`,{headers})).json();expect(assigned[0].role).toBe('operator')
+ await page.getByRole('button',{name:`Edit user ${username}`,exact:true}).click()
+ await page.getByLabel('First name',{exact:true}).fill(`QA ${username}`)
+ await page.getByRole('button',{name:'Save user',exact:true}).click()
+ await expect(page.getByText(`QA ${username}`,{exact:true})).toBeVisible()
+ await page.evaluate(()=>window.scrollTo(0,0))
+ await page.waitForTimeout(800)
+ await page.screenshot({path:'/tmp/cronos-users-desktop.png',animations:'disabled'})
+ await page.setViewportSize({width:390,height:844})
+ await expect(page.getByRole('heading',{name:'Users & roles',exact:true})).toBeVisible()
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true)
+ await page.evaluate(()=>window.scrollTo(0,0))
+ await page.waitForTimeout(400)
+ await page.screenshot({path:'/tmp/cronos-users-mobile.png',animations:'disabled'})
+ expect(errors).toEqual([])
+ }finally{if(id){await request.put(`/api/v1/users/${id}/access`,{headers,data:[]});await request.patch(`/api/v1/users/${id}`,{headers,data:{is_active:false}})}}
+})
