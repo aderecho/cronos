@@ -43,3 +43,23 @@ SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https') if os.getenv('TRUS
 DATA_UPLOAD_MAX_MEMORY_SIZE = 128 * 1024
 
 CACHES = {'default': {'BACKEND': 'django.core.cache.backends.redis.RedisCache', 'LOCATION': CELERY_BROKER_URL, 'KEY_PREFIX': 'cronos-cache'}}
+
+# Keep production exception tracebacks visible in the systemd journal.
+# Django's default console handler is filtered out when DEBUG is false.
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'level': 'ERROR',
+        },
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console'],
+            'level': 'ERROR',
+            'propagate': False,
+        },
+    },
+}
