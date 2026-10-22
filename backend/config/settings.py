@@ -12,7 +12,8 @@ MIDDLEWARE = ['django.middleware.security.SecurityMiddleware', 'corsheaders.midd
 ROOT_URLCONF = 'config.urls'
 TEMPLATES = [{'BACKEND': 'django.template.backends.django.DjangoTemplates', 'DIRS': [], 'APP_DIRS': True, 'OPTIONS': {'context_processors': ['django.template.context_processors.request', 'django.contrib.auth.context_processors.auth', 'django.contrib.messages.context_processors.messages']}}]
 WSGI_APPLICATION = 'config.wsgi.application'
-DATABASES = {'default': {'ENGINE': 'django.db.backends.mysql', 'NAME': os.getenv('MYSQL_DATABASE', 'cronos'), 'USER': os.getenv('MYSQL_USER', 'cronos'), 'PASSWORD': os.environ['MYSQL_PASSWORD'], 'HOST': os.getenv('MYSQL_HOST', '127.0.0.1'), 'PORT': os.getenv('MYSQL_PORT', '3306'), 'OPTIONS': {'charset': 'utf8mb4', 'init_command': "SET sql_mode='STRICT_TRANS_TABLES'"}, 'CONN_MAX_AGE': 60}}
+# ASGI requests must close database connections instead of retaining them.
+DATABASES = {'default': {'ENGINE': 'django.db.backends.mysql', 'NAME': os.getenv('MYSQL_DATABASE', 'cronos'), 'USER': os.getenv('MYSQL_USER', 'cronos'), 'PASSWORD': os.environ['MYSQL_PASSWORD'], 'HOST': os.getenv('MYSQL_HOST', '127.0.0.1'), 'PORT': os.getenv('MYSQL_PORT', '3306'), 'OPTIONS': {'charset': 'utf8mb4', 'init_command': "SET sql_mode='STRICT_TRANS_TABLES'"}, 'CONN_MAX_AGE': 0}}
 AUTH_PASSWORD_VALIDATORS = [{'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'}, {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'}, {'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator'}, {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'}]
 LANGUAGE_CODE = 'en-us'
 TIME_ZONE = 'UTC'
