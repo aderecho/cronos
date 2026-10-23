@@ -7,6 +7,7 @@ from django.http import FileResponse, JsonResponse, Http404
 from django.views.decorators.http import require_GET
 
 ARTIFACTS = {
+    'update-host.sh': 'text/x-shellscript',
     'install.sh': 'text/x-shellscript',
     'cronos_agent.py': 'text/x-python',
     'requirements.txt': 'text/plain',
